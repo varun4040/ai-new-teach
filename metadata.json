@@ -1,0 +1,11 @@
+{
+  "name": "AI Live Teacher",
+  "description": "Realtime AI multimodal teacher for young children with interactive whiteboard, audio, camera, and textbook ingestion.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
