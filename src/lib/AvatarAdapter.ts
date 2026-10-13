@@ -3,7 +3,7 @@
  * (PlaceholderTeacherAdapter now, HeyGenAdapter / DIDAdapter in the future).
  */
 
-import { TeacherEmotion, TeacherGesture, AvatarState } from '../types';
+import { TeacherEmotion, CharacterState, TeacherGesture, AvatarState } from '../types';
 
 export interface AvatarAdapterListener {
   onStateChange?: (state: AvatarState) => void;
@@ -18,13 +18,16 @@ export interface AvatarAdapter {
   initialize(containerElement?: HTMLElement): Promise<void>;
 
   /** Speak text or play audio buffer */
-  speak(audioData?: ArrayBuffer | string, text?: string): Promise<void>;
+  speak(audioData?: ArrayBuffer | string, text?: string, languageMode?: string): Promise<void>;
 
   /** Immediately interrupt ongoing speech and animation */
   interrupt(): void;
 
   /** Update emotional facial expression */
   setEmotion(emotion: TeacherEmotion): void;
+
+  /** Update character state (IDLE, LISTENING, THINKING, SPEAKING, HAPPY, ENCOURAGING, CONFUSED, CELEBRATING) */
+  setCharacterState(state: CharacterState): void;
 
   /** Trigger body gesture */
   setGesture(gesture: TeacherGesture): void;
@@ -34,6 +37,12 @@ export interface AvatarAdapter {
 
   /** Direct focus gaze to student / camera */
   lookAtStudent(): void;
+
+  /** Set current active language mode for speech synthesis */
+  setLanguage?(lang: string): void;
+
+  /** Randomly or manually trigger an organic eye-blink animation */
+  triggerBlink?(options?: { doubleBlink?: boolean; durationMs?: number }): void;
 
   /** Get current snapshot state */
   getState(): AvatarState;

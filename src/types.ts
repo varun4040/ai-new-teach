@@ -144,6 +144,38 @@ export interface ShowFlashcardsPayload {
   hint?: string;
 }
 
+export interface FlashcardItem {
+  id?: string;
+  front: string; // Vocabulary word or math problem
+  back: string;  // Definition, answer, or solution steps
+  category?: 'vocabulary' | 'math' | 'science' | 'general' | string;
+  hint?: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  exampleSentence?: string;
+  steps?: string[];
+  visualClue?: string;
+  isFlipped?: boolean;
+}
+
+export interface FlashcardPayload {
+  title: string;
+  category?: 'vocabulary' | 'math' | 'science' | 'general' | string;
+  front?: string;
+  back?: string;
+  hint?: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  exampleSentence?: string;
+  steps?: string[];
+  visualClue?: string;
+  cards?: FlashcardItem[];
+  currentIndex?: number;
+  isFlipped?: boolean; // When true, the AI flips the card to reveal the back
+  flippedSide?: 'front' | 'back';
+  action?: 'show' | 'flip' | 'next' | 'prev' | 'shuffle';
+}
+
 export interface HighlightItemPayload {
   itemId: string;
   color?: string;
@@ -194,6 +226,7 @@ export type WhiteboardToolEvent =
   | { type: 'show_timeline'; payload: ShowTimelinePayload }
   | { type: 'show_table'; payload: ShowTablePayload }
   | { type: 'show_flashcards'; payload: ShowFlashcardsPayload }
+  | { type: 'flashcard'; payload: FlashcardPayload }
   | { type: 'highlight_item'; payload: HighlightItemPayload }
   | { type: 'point_to_element'; payload: PointToElementPayload }
   | { type: 'clear_board' }
@@ -225,6 +258,36 @@ export type TeacherEmotion =
   | 'listening'
   | 'surprised';
 
+export type CharacterState =
+  | 'IDLE'
+  | 'LISTENING'
+  | 'THINKING'
+  | 'SPEAKING'
+  | 'HAPPY'
+  | 'ENCOURAGING'
+  | 'CONFUSED'
+  | 'CELEBRATING';
+
+export const EMOTION_TO_CHARACTER_STATE: Record<TeacherEmotion, CharacterState> = {
+  happy: 'HAPPY',
+  encouraging: 'ENCOURAGING',
+  thinking: 'THINKING',
+  explaining: 'SPEAKING',
+  listening: 'LISTENING',
+  surprised: 'CELEBRATING',
+};
+
+export const CHARACTER_STATE_TO_EMOTION: Record<CharacterState, TeacherEmotion> = {
+  IDLE: 'happy',
+  LISTENING: 'listening',
+  THINKING: 'thinking',
+  SPEAKING: 'explaining',
+  HAPPY: 'happy',
+  ENCOURAGING: 'encouraging',
+  CONFUSED: 'thinking',
+  CELEBRATING: 'surprised',
+};
+
 export type TeacherGesture =
   | 'pointing_left'
   | 'pointing_right'
@@ -233,14 +296,49 @@ export type TeacherGesture =
   | 'thumbs_up'
   | 'idle';
 
+export interface MotionKinematics {
+  headYaw: number; // -15 to +15 deg
+  headPitch: number; // -10 to +10 deg
+  headRoll: number; // -10 to +10 deg
+  headY: number; // vertical float px
+  torsoScaleY: number; // breathing expansion 1.0 - 1.035
+  torsoScaleX: number; // 0.99 - 1.01
+  torsoY: number; // breathing translation px
+  eyeGazeX: number; // -5 to +5 px
+  eyeGazeY: number; // -4 to +4 px
+  eyebrowLeftY: number; // -6 to +6 px
+  eyebrowRightY: number; // -6 to +6 px
+  eyebrowLeftArch: number; // 0 (flat) to 10 (high)
+  eyebrowRightArch: number;
+  mouthOpen: number; // 0 (closed) to 1 (wide)
+  mouthWidth: number; // 0.8 to 1.2
+  auraColor: string;
+  springStiffness: number;
+  springDamping: number;
+  springMass: number;
+  transitionCurve: [number, number, number, number]; // non-linear cubic bezier curve
+  containerScaleMin?: number; // Subtle breathing minimum scale (e.g. 1.0)
+  containerScaleMax?: number; // Subtle breathing maximum scale (e.g. 1.018)
+  breathingDurationSec?: number; // Continuous respiration period in seconds (e.g. 3.8s)
+  breathingCurve?: [number, number, number, number]; // Non-linear breathing cubic bezier
+}
+
 export interface AvatarState {
   isSpeaking: boolean;
   emotion: TeacherEmotion;
+  characterState?: CharacterState;
   gesture: TeacherGesture;
   lookingAt: 'student' | 'board' | 'desk';
   transcriptText?: string;
   isBlinking?: boolean;
   cssTransitionClass?: string;
+  motionKinematics?: MotionKinematics;
+  springConfig?: { stiffness: number; damping: number; mass: number };
+  transitionCurve?: [number, number, number, number];
+  containerBreathingScale?: [number, number, number];
+  breathingDurationSec?: number;
+  speechCadence?: number;
+  viseme?: 'rest' | 'open' | 'wide' | 'round' | 'smile';
 }
 
 export interface ChatMessage {

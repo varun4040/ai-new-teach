@@ -40,9 +40,12 @@ import {
   Maximize2,
   Check,
   Camera,
+  Layers,
 } from 'lucide-react';
 import { WhiteboardToolEvent, WhiteboardObjectType } from '../types';
 import { soundEffects } from '../lib/soundEffects';
+import confetti from 'canvas-confetti';
+import { InteractiveFlashcards } from './InteractiveFlashcards';
 
 export const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'clear' = 'light') => {
   if (typeof window !== 'undefined' && 'vibrate' in navigator) {
@@ -279,6 +282,49 @@ function renderStrokeOnContext(ctx: CanvasRenderingContext2D, stroke: Annotation
   ctx.restore();
 }
 
+// Child-friendly Practice Questions for instant whiteboard testing
+export const PRACTICE_QUESTIONS = [
+  {
+    question: '🍎 5 Red Apples + 3 Green Apples = How many apples altogether?',
+    options: ['6 Apples', '7 Apples', '8 Apples', '9 Apples'],
+    answerIndex: 2,
+    hint: 'Count on starting from 5: 6, 7, 8!',
+  },
+  {
+    question: '⭐ How many corners does a bright triangle have?',
+    options: ['2 Corners', '3 Corners', '4 Corners', '5 Corners'],
+    answerIndex: 1,
+    hint: 'Tri means three, just like a tricycle has 3 wheels! 🚲',
+  },
+  {
+    question: '⏰ The long hand is at 12 and the short hand is at 3. What time is it?',
+    options: ['12:00 O’clock', '3:00 O’clock', '6:00 O’clock', '9:00 O’clock'],
+    answerIndex: 1,
+    hint: 'The little hand points directly to the hour!',
+  },
+  {
+    question: '🦋 What beautiful creature does a caterpillar turn into?',
+    options: ['Froggy', 'Dragonfly', 'Colorful Butterfly', 'Honey Bee'],
+    answerIndex: 2,
+    hint: 'It comes out of a chrysalis with fluttering wings! 🌸',
+  },
+];
+
+// Reusable child-friendly animation presets
+export const bounceAnimationVariants = {
+  // Joyful springy bounce with subtle squash & stretch
+  y: [0, -18, 2, -10, 1, -4, 0],
+  scale: [1, 1.05, 0.98, 1.03, 0.99, 1],
+  transition: { duration: 0.65, ease: 'easeOut' },
+};
+
+export const shakeAnimationVariants = {
+  // Subtle horizontal wiggle/shake with gentle tilt
+  x: [0, -9, 9, -7, 7, -4, 4, -1, 1, 0],
+  rotate: [0, -2, 2, -1.5, 1.5, -0.5, 0.5, 0],
+  transition: { duration: 0.55, ease: 'easeInOut' },
+};
+
 export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
   toolEvent,
   onClear,
@@ -292,6 +338,25 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
   const [penWidth, setPenWidth] = useState<number>(4);
   const [showShapeMenu, setShowShapeMenu] = useState<boolean>(false);
   const [isToolbarMinimized, setIsToolbarMinimized] = useState<boolean>(false);
+
+  // Interactive Practice / Quiz State for Whiteboard Feedback
+  const [activePracticeIndex, setActivePracticeIndex] = useState<number>(0);
+  const [localPracticeQuestion, setLocalPracticeQuestion] = useState<{
+    question: string;
+    options: string[];
+    answerIndex: number;
+    hint?: string;
+  } | null>(null);
+  const [isFlashcardsActive, setIsFlashcardsActive] = useState<boolean>(false);
+  const [feedbackAnimKey, setFeedbackAnimKey] = useState<number>(0);
+  const [selectedOptionState, setSelectedOptionState] = useState<{
+    index: number;
+    isCorrect: boolean;
+  } | null>(null);
+  const [groupCountAnswerState, setGroupCountAnswerState] = useState<{
+    selectedVal: number;
+    isCorrect: boolean;
+  } | null>(null);
 
   // Vector strokes history for crisp rendering, resize stability, and undo/redo
   const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
@@ -414,7 +479,34 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
     triggerHaptic('clear');
     soundEffects.playWhoosh();
     clearDrawing();
+    setSelectedOption(null);
+    setSelectedOptionState(null);
+    setGroupCountAnswerState(null);
+    setLocalPracticeQuestion(null);
+    setIsFlashcardsActive(false);
+    setActiveBoardImageUrl(null);
+    setActiveBoardImageCaption(null);
+    setPointerState(null);
     onClear();
+  };
+
+  const handleOpenFlashcards = () => {
+    triggerHaptic('medium');
+    soundEffects.playPop();
+    setIsFlashcardsActive(true);
+    setLocalPracticeQuestion(null);
+  };
+
+  const handleLaunchPracticeQuestion = () => {
+    triggerHaptic('medium');
+    soundEffects.playPop();
+    setIsFlashcardsActive(false);
+    const nextQ = PRACTICE_QUESTIONS[activePracticeIndex % PRACTICE_QUESTIONS.length];
+    setActivePracticeIndex((prev) => prev + 1);
+    setLocalPracticeQuestion(nextQ);
+    setSelectedOption(null);
+    setSelectedOptionState(null);
+    setFeedbackAnimKey((k) => k + 1);
   };
 
   const handleDownloadSnapshot = () => {
@@ -467,8 +559,27 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
 
   useEffect(() => {
     setSelectedOption(null);
+    setSelectedOptionState(null);
+    setGroupCountAnswerState(null);
     if (toolEvent?.type === 'check_answer') {
+      setFeedbackAnimKey((k) => k + 1);
       triggerHaptic(toolEvent.payload.isCorrect ? 'success' : 'error');
+      if (toolEvent.payload.isCorrect) {
+        soundEffects.playSuccess();
+        try {
+          confetti({
+            particleCount: 110,
+            spread: 75,
+            origin: { y: 0.6 },
+            colors: ['#FF6321', '#16A34A', '#2563EB', '#FACC15', '#9333EA', '#EC4899'],
+          });
+        } catch (e) {}
+      } else {
+        soundEffects.playTryAgain();
+      }
+    } else if (toolEvent?.type === 'show_multiple_choice') {
+      setLocalPracticeQuestion(null);
+      setFeedbackAnimKey((k) => k + 1);
     } else if (toolEvent?.type === 'show_image') {
       triggerHaptic('medium');
       if (toolEvent.payload.url) {
@@ -753,6 +864,208 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
     redrawAllStrokes();
   };
 
+  const renderInteractiveQuestion = (
+    question: string,
+    options: string[],
+    answerIndex: number = 0,
+    hint?: string,
+    isLocalPractice = false
+  ) => {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-[#5A5A40] text-xs font-bold uppercase tracking-wider">
+            <HelpCircle className="w-4 h-4 text-amber-600" />
+            <span>Interactive Practice Question</span>
+          </div>
+          {isLocalPractice && (
+            <div className="flex items-center gap-2">
+              <button
+                id="next-practice-question-btn"
+                onClick={handleLaunchPracticeQuestion}
+                className="text-xs font-bold text-[#FF6321] hover:underline cursor-pointer flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-3 py-1 rounded-full border border-orange-200 transition-colors"
+              >
+                <span>Next Question</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        <h3 className="text-xl font-bold text-[#333333] mb-6 leading-relaxed">
+          {question}
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {options.map((option, idx) => {
+            const isSelected = selectedOption === idx;
+            const isCorrect = answerIndex === idx;
+
+            return (
+              <motion.button
+                key={`opt-${idx}-${selectedOption === idx ? feedbackAnimKey : 'idle'}`}
+                id={`mc-option-${idx}`}
+                onClick={() => {
+                  triggerHaptic(isCorrect ? 'success' : 'error');
+                  setSelectedOption(idx);
+                  setSelectedOptionState({ index: idx, isCorrect });
+                  setFeedbackAnimKey((k) => k + 1);
+
+                  if (isCorrect) {
+                    soundEffects.playSuccess();
+                    try {
+                      confetti({
+                        particleCount: 110,
+                        spread: 75,
+                        origin: { y: 0.6 },
+                        colors: ['#FF6321', '#16A34A', '#2563EB', '#FACC15', '#9333EA', '#EC4899'],
+                      });
+                    } catch (e) {}
+                  } else {
+                    soundEffects.playTryAgain();
+                  }
+
+                  if (onAnswerSubmit && toolEvent?.type === 'show_multiple_choice') {
+                    setTimeout(() => {
+                      onAnswerSubmit(idx, isCorrect);
+                    }, 500);
+                  }
+                }}
+                animate={
+                  isSelected
+                    ? isCorrect
+                      ? bounceAnimationVariants
+                      : shakeAnimationVariants
+                    : { x: 0, y: 0, scale: 1, rotate: 0 }
+                }
+                className={`flex items-center justify-between p-4 rounded-2xl border text-left font-medium transition-colors cursor-pointer ${
+                  isSelected
+                    ? isCorrect
+                      ? 'bg-[#E8F3EF] border-[#5A5A40] text-[#5A5A40] ring-2 ring-[#5A5A40]/30 shadow-md'
+                      : 'bg-amber-50 border-amber-300 text-amber-900 ring-2 ring-amber-300/40 shadow-xs'
+                    : 'bg-white border-gray-200 hover:bg-[#F3F7F5] text-[#333333] hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`flex items-center justify-center w-7 h-7 rounded-lg text-xs font-mono font-bold transition-colors ${
+                      isSelected
+                        ? isCorrect
+                          ? 'bg-[#5A5A40] text-white'
+                          : 'bg-amber-200 text-amber-900'
+                        : 'bg-[#F3F7F5] text-[#5A5A40]'
+                    }`}
+                  >
+                    {String.fromCharCode(65 + idx)}
+                  </span>
+                  <span className="text-base font-semibold">{option}</span>
+                </div>
+
+                {isSelected && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={
+                      isCorrect
+                        ? { scale: [0, 1.35, 1], rotate: [0, 12, -8, 0] }
+                        : { scale: [0, 1.15, 1], x: [0, -4, 4, -2, 2, 0] }
+                    }
+                    transition={{ duration: 0.45 }}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                      isCorrect
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    {isCorrect ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 animate-bounce" />
+                        <span>Super! ⭐</span>
+                      </>
+                    ) : (
+                      <>
+                        <HelpCircle className="w-4 h-4 text-amber-600" />
+                        <span>Try again! 🌱</span>
+                      </>
+                    )}
+                  </motion.span>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+
+        {/* Dynamic Animated Feedback Callout Banner */}
+        {selectedOptionState && (
+          <AnimatePresence mode="wait">
+            {selectedOptionState.isCorrect ? (
+              <motion.div
+                key={`banner-correct-${feedbackAnimKey}`}
+                initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                animate={{
+                  opacity: 1,
+                  ...bounceAnimationVariants,
+                }}
+                className="mt-5 p-4 rounded-2xl bg-gradient-to-r from-[#E8F3EF] via-[#F3F7F5] to-emerald-50 border-2 border-[#5A5A40] shadow-sm flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <motion.div
+                    animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.25, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 1.5 }}
+                    className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl shadow-xs"
+                  >
+                    🌟
+                  </motion.div>
+                  <div>
+                    <h4 className="font-bold text-sm text-[#5A5A40] flex items-center gap-2">
+                      <span>Hooray! That is completely correct!</span>
+                      <span className="text-[11px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                        Super Star ✨
+                      </span>
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-0.5">
+                      {hint || 'Great thinking! You found the right answer with wonderful precision.'}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`banner-incorrect-${feedbackAnimKey}`}
+                initial={{ opacity: 0 }}
+                animate={{
+                  opacity: 1,
+                  ...shakeAnimationVariants,
+                }}
+                className="mt-5 p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 shadow-sm flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <motion.div
+                    animate={{ x: [0, -3, 3, 0] }}
+                    transition={{ duration: 0.5 }}
+                    className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl shadow-xs"
+                  >
+                    🌱
+                  </motion.div>
+                  <div>
+                    <h4 className="font-bold text-sm text-amber-950 flex items-center gap-2">
+                      <span>Good thinking! Let’s give it another try!</span>
+                      <span className="text-[11px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                        Keep Trying!
+                      </span>
+                    </h4>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      {hint ? `Hint: ${hint}` : 'Mistakes help our brain grow! Tap another option to try again.'}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div
       id="digital-whiteboard-container"
@@ -906,6 +1219,32 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
               )}
             </AnimatePresence>
           </div>
+
+          {/* Practice Quiz / Interactive Question Button */}
+          <button
+            id="practice-quiz-btn"
+            onClick={handleLaunchPracticeQuestion}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-full transition-all cursor-pointer shadow-xs"
+            title="Try interactive practice question with child-friendly bounce & shake feedback"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
+            <span>Practice Quiz</span>
+          </button>
+
+          {/* Interactive Flashcards Tool Button */}
+          <button
+            id="interactive-flashcards-btn"
+            onClick={handleOpenFlashcards}
+            className={`flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full transition-all cursor-pointer shadow-xs border ${
+              isFlashcardsActive
+                ? 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-200'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-300'
+            }`}
+            title="Interactive Flashcards: Flip virtual cards for vocabulary words and math problems"
+          >
+            <Layers className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Flashcards</span>
+          </button>
 
           {/* AI Image Generator Button */}
           <button
@@ -1348,7 +1687,7 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
 
         <div className="relative z-0 w-full flex items-center justify-center">
           <AnimatePresence mode="wait">
-            {!toolEvent ? (
+            {!toolEvent && !localPracticeQuestion ? (
               <motion.div
                 key="empty-board"
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -1363,6 +1702,50 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
                 <p className="text-sm text-gray-500 leading-relaxed">
                   Ms. Priya will draw visual objects, number lines, equations, and story cards here during our class! You can also click <span className="font-bold text-[#FF6321]">Annotate</span> to draw freely.
                 </p>
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                  <button
+                    id="empty-board-flashcards-btn"
+                    onClick={handleOpenFlashcards}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all cursor-pointer hover:scale-105"
+                  >
+                    <Layers className="w-4 h-4 text-emerald-200" />
+                    <span>Open Interactive Flashcards</span>
+                  </button>
+                  <button
+                    id="empty-board-practice-btn"
+                    onClick={handleLaunchPracticeQuestion}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#5A5A40] hover:bg-[#474732] text-white text-xs font-bold rounded-2xl shadow-sm transition-all cursor-pointer hover:scale-105"
+                  >
+                    <HelpCircle className="w-4 h-4 text-amber-300" />
+                    <span>Practice Quiz</span>
+                  </button>
+                </div>
+              </motion.div>
+            ) : isFlashcardsActive && !toolEvent ? (
+              <motion.div
+                key="local-flashcards"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                className="w-full max-w-2xl bg-white/95 backdrop-blur-xs rounded-3xl p-4 shadow-xs"
+              >
+                <InteractiveFlashcards onClose={() => setIsFlashcardsActive(false)} />
+              </motion.div>
+            ) : localPracticeQuestion && !toolEvent ? (
+              <motion.div
+                key={`local-practice-${localPracticeQuestion.question}`}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                className="w-full max-w-2xl bg-white/95 backdrop-blur-xs rounded-3xl p-2 shadow-xs"
+              >
+                {renderInteractiveQuestion(
+                  localPracticeQuestion.question,
+                  localPracticeQuestion.options,
+                  localPracticeQuestion.answerIndex,
+                  localPracticeQuestion.hint,
+                  true
+                )}
               </motion.div>
             ) : (
               <motion.div
@@ -1451,6 +1834,87 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
                     <div className="mt-4 px-5 py-2 rounded-full bg-[#FF6321] text-white text-sm font-bold shadow-xs">
                       Total Count = {toolEvent.payload.count} {toolEvent.payload.object}s
                     </div>
+
+                    {/* Interactive Count Choices for Young Learners */}
+                    {toolEvent.payload.group1 && toolEvent.payload.group2 && (
+                      <div className="mt-5 pt-4 border-t border-gray-200/70 w-full max-w-md flex flex-col items-center">
+                        <span className="text-xs font-bold text-[#5A5A40] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          How many {toolEvent.payload.object}s in all? Tap your answer:
+                        </span>
+                        <div className="flex flex-wrap items-center justify-center gap-2.5">
+                          {[
+                            Math.max(1, toolEvent.payload.count - 2),
+                            Math.max(1, toolEvent.payload.count - 1),
+                            toolEvent.payload.count,
+                            toolEvent.payload.count + 1,
+                          ].map((val, idx) => {
+                            const isSelected = groupCountAnswerState?.selectedVal === val;
+                            const isCorrect = val === toolEvent.payload.count;
+
+                            return (
+                              <motion.button
+                                key={`group-val-${val}-${idx}`}
+                                id={`obj-count-opt-${val}`}
+                                onClick={() => {
+                                  triggerHaptic(isCorrect ? 'success' : 'error');
+                                  setGroupCountAnswerState({ selectedVal: val, isCorrect });
+                                  if (isCorrect) {
+                                    soundEffects.playSuccess();
+                                    try {
+                                      confetti({
+                                        particleCount: 100,
+                                        spread: 70,
+                                        origin: { y: 0.6 },
+                                      });
+                                    } catch (e) {}
+                                  } else {
+                                    soundEffects.playTryAgain();
+                                  }
+                                }}
+                                animate={
+                                  isSelected
+                                    ? isCorrect
+                                      ? bounceAnimationVariants
+                                      : shakeAnimationVariants
+                                    : { x: 0, y: 0, scale: 1, rotate: 0 }
+                                }
+                                className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                                  isSelected
+                                    ? isCorrect
+                                      ? 'bg-emerald-100 border-emerald-500 text-emerald-900 shadow-md ring-2 ring-emerald-300'
+                                      : 'bg-amber-100 border-amber-400 text-amber-900 ring-2 ring-amber-200'
+                                    : 'bg-white border-gray-200 hover:bg-gray-50 text-gray-800 hover:border-gray-300'
+                                }`}
+                              >
+                                <span>{val} {OBJECT_EMOJIS[toolEvent.payload.object]?.emoji || '🍎'}</span>
+                                {isSelected && (
+                                  <span>{isCorrect ? '🌟' : '🌱'}</span>
+                                )}
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                        {groupCountAnswerState && (
+                          <motion.p
+                            key={`group-feedback-${groupCountAnswerState.selectedVal}`}
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={
+                              groupCountAnswerState.isCorrect
+                                ? { opacity: 1, y: 0, scale: [0.95, 1.04, 1] }
+                                : { opacity: 1, x: [0, -6, 6, -3, 3, 0] }
+                            }
+                            className={`text-xs font-semibold mt-2.5 ${
+                              groupCountAnswerState.isCorrect ? 'text-emerald-700' : 'text-amber-800'
+                            }`}
+                          >
+                            {groupCountAnswerState.isCorrect
+                              ? `🌟 Super! ${toolEvent.payload.group1} + ${toolEvent.payload.group2} = ${toolEvent.payload.count} apples!`
+                              : `🌱 Good count! Try counting once more: ${toolEvent.payload.group1} plus ${toolEvent.payload.group2} equals...`}
+                          </motion.p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1744,111 +2208,97 @@ export const DigitalWhiteboard: React.FC<DigitalWhiteboardProps> = ({
                   </div>
                 )}
 
-                {/* TOOL: SHOW_FLASHCARDS */}
+                {/* TOOL: FLASHCARD (NEW TOOL) & SHOW_FLASHCARDS */}
+                {toolEvent.type === 'flashcard' && (
+                  <div className="p-2 sm:p-4 flex flex-col items-center w-full">
+                    <InteractiveFlashcards payload={toolEvent.payload} />
+                  </div>
+                )}
+
                 {toolEvent.type === 'show_flashcards' && (
-                  <div className="p-6 flex flex-col items-center">
-                    <h3 className="text-lg font-bold text-[#5A5A40] mb-4">
-                      {toolEvent.payload.title}
-                    </h3>
-                    <div className="w-full max-w-md p-8 rounded-3xl bg-gradient-to-br from-[#E8F3EF] to-[#F3F7F5] border border-[#C8DCD1] shadow-md flex flex-col items-center text-center">
-                      <span className="text-xs font-bold uppercase text-[#5A5A40] tracking-wider mb-2">
-                        🧠 Memory Flashcard
-                      </span>
-                      <p className="text-xl font-extrabold text-[#333333] mb-6">
-                        {toolEvent.payload.front}
-                      </p>
-                      <div className="p-4 rounded-2xl bg-white/90 border border-gray-200 w-full mb-4">
-                        <span className="text-xs font-bold text-[#FF6321] block mb-1">Answer / Definition:</span>
-                        <p className="text-base font-bold text-[#333333]">{toolEvent.payload.back}</p>
-                      </div>
-                      {toolEvent.payload.hint && (
-                        <p className="text-xs text-gray-500 italic">
-                          💡 Hint: {toolEvent.payload.hint}
-                        </p>
-                      )}
-                    </div>
+                  <div className="p-2 sm:p-4 flex flex-col items-center w-full">
+                    <InteractiveFlashcards
+                      payload={{
+                        title: toolEvent.payload.title,
+                        front: toolEvent.payload.front,
+                        back: toolEvent.payload.back,
+                        hint: toolEvent.payload.hint,
+                        category: 'vocabulary',
+                      }}
+                    />
                   </div>
                 )}
                 {/* TOOL: SHOW_MULTIPLE_CHOICE */}
-                {toolEvent.type === 'show_multiple_choice' && (
-                  <div className="p-6">
-                    <div className="flex items-center gap-2 text-[#5A5A40] text-xs font-bold uppercase tracking-wider mb-2">
-                      <HelpCircle className="w-4 h-4" />
-                      Interactive Practice Question
-                    </div>
-                    <h3 className="text-xl font-bold text-[#333333] mb-6">
-                      {toolEvent.payload.question}
-                    </h3>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {toolEvent.payload.options.map((option, idx) => {
-                        const isSelected = selectedOption === idx;
-                        const isCorrect = toolEvent.payload.answerIndex === idx;
-
-                        return (
-                          <button
-                            key={`opt-${idx}`}
-                            onClick={() => {
-                              triggerHaptic(isCorrect ? 'success' : 'error');
-                              setSelectedOption(idx);
-                              if (onAnswerSubmit) {
-                                onAnswerSubmit(idx, isCorrect);
-                              }
-                            }}
-                            className={`flex items-center justify-between p-4 rounded-2xl border text-left font-medium transition-all cursor-pointer ${
-                              isSelected
-                                ? isCorrect
-                                  ? 'bg-[#E8F3EF] border-[#5A5A40] text-[#5A5A40]'
-                                  : 'bg-red-50 border-red-300 text-red-800'
-                                : 'bg-white border-gray-200 hover:bg-[#F3F7F5] text-[#333333]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-[#F3F7F5] text-[#5A5A40] text-xs font-mono font-bold">
-                                {String.fromCharCode(65 + idx)}
-                              </span>
-                              <span className="text-base">{option}</span>
-                            </div>
-
-                            {isSelected && (
-                              <span>
-                                {isCorrect ? (
-                                  <CheckCircle2 className="w-5 h-5 text-[#5A5A40]" />
-                                ) : (
-                                  <XCircle className="w-5 h-5 text-red-500" />
-                                )}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                {toolEvent.type === 'show_multiple_choice' &&
+                  renderInteractiveQuestion(
+                    toolEvent.payload.question,
+                    toolEvent.payload.options,
+                    toolEvent.payload.answerIndex,
+                    undefined,
+                    false
+                  )}
 
                 {/* TOOL: CHECK_ANSWER */}
                 {toolEvent.type === 'check_answer' && (
-                  <div
-                    className={`p-6 rounded-3xl border shadow-xs flex items-center gap-4 ${
+                  <motion.div
+                    key={`check-ans-${toolEvent.payload.isCorrect ? 'correct' : 'incorrect'}-${feedbackAnimKey}`}
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={
                       toolEvent.payload.isCorrect
-                        ? 'bg-[#E8F3EF] border-[#C8DCD1] text-[#5A5A40]'
-                        : 'bg-amber-50 border-amber-200 text-amber-900'
+                        ? {
+                            opacity: 1,
+                            ...bounceAnimationVariants,
+                          }
+                        : {
+                            opacity: 1,
+                            ...shakeAnimationVariants,
+                          }
+                    }
+                    className={`p-6 rounded-3xl border-2 shadow-md flex items-center gap-4 ${
+                      toolEvent.payload.isCorrect
+                        ? 'bg-[#E8F3EF] border-[#5A5A40] text-[#5A5A40]'
+                        : 'bg-amber-50 border-amber-300 text-amber-950'
                     }`}
                   >
-                    <div className="p-3 rounded-2xl bg-white shadow-xs">
+                    <motion.div
+                      animate={
+                        toolEvent.payload.isCorrect
+                          ? {
+                              scale: [1, 1.3, 0.95, 1.15, 1],
+                              rotate: [0, -12, 12, -6, 6, 0],
+                            }
+                          : {
+                              x: [0, -6, 6, -4, 4, 0],
+                              rotate: [0, -4, 4, 0],
+                            }
+                      }
+                      transition={{ duration: 0.6 }}
+                      className="p-3.5 rounded-2xl bg-white shadow-xs"
+                    >
                       {toolEvent.payload.isCorrect ? (
-                        <CheckCircle2 className="w-8 h-8 text-[#5A5A40]" />
+                        <CheckCircle2 className="w-9 h-9 text-[#5A5A40]" />
                       ) : (
-                        <HelpCircle className="w-8 h-8 text-amber-600" />
+                        <HelpCircle className="w-9 h-9 text-amber-600" />
                       )}
+                    </motion.div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-lg font-bold">
+                          {toolEvent.payload.isCorrect ? '🌟 Super Star! Wonderful!' : '🌱 Let’s Try Again Together!'}
+                        </h4>
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                            toolEvent.payload.isCorrect
+                              ? 'bg-emerald-200 text-emerald-800'
+                              : 'bg-amber-200 text-amber-800'
+                          }`}
+                        >
+                          {toolEvent.payload.isCorrect ? 'Correct!' : 'Keep Learning!'}
+                        </span>
+                      </div>
+                      <p className="text-sm opacity-95 leading-relaxed">{toolEvent.payload.feedback}</p>
                     </div>
-                    <div>
-                      <h4 className="text-lg font-bold mb-1">
-                        {toolEvent.payload.isCorrect ? 'Super Job!' : 'Let’s Try Again Together!'}
-                      </h4>
-                      <p className="text-sm opacity-90">{toolEvent.payload.feedback}</p>
-                    </div>
-                  </div>
+                  </motion.div>
                 )}
               </motion.div>
             )}

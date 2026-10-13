@@ -34,9 +34,9 @@ export const SUPPORTED_LANGUAGES: LanguageDefinition[] = [
     flag: '🇬🇧',
     category: 'primary',
     locale: 'en-US',
-    greeting: "Switched to English! Let's explore and learn together.",
+    greeting: "Switched to English! Let's explore and learn together in English.",
     promptInstruction:
-      'Teach and explain in warm, clear, and age-appropriate English for elementary school children. Keep sentences short (1-3 sentences), encouraging, and visually descriptive.',
+      'STRICT ENGLISH LANGUAGE MANDATE: You MUST teach and explain EXCLUSIVELY in pure, fluent, natural, and standard English. ABSOLUTELY NO Hindi words, romanized Hindi, or Hinglish mixing (NEVER use words like "chalo", "beta", "aaj hum", "dekhte hain", "shabash", "arey waah", "hai na", "samjhe"). Speak with cheerful, encouraging, grammatically pristine English suitable for primary school students (1-3 sentences per turn).',
     ui: {
       micOn: 'Mic ON',
       startSpeaking: 'Start Speaking',
@@ -86,21 +86,26 @@ export const SUPPORTED_LANGUAGES: LanguageDefinition[] = [
     flag: '🇮🇳',
     category: 'primary',
     locale: 'en-IN',
-    greeting: "Hinglish mode active! Chalo, saath mein fun problems solve karte hain!",
+    greeting: "Namaste! Hinglish mode ON hai! Chalo, saath mein mast interactive concepts seekhte hain!",
     promptInstruction:
-      'Teach and explain in natural Indian Hinglish (a warm blend of simple English & colloquial conversational Hindi, e.g. "Chalo whiteboard par dekhte hain!", "Super! Yeh bilkul correct answer hai!").',
+      'TEACH IN AUTHENTIC INDIAN HINGLISH: You are Ms. Priya speaking in natural, conversational Hinglish (a warm, encouraging blend of everyday English and Hindi in Roman script, exactly how friendly Indian schoolteachers teach young kids). ' +
+      'Rules: ' +
+      '1. Use colloquial encouraging teacher phrases: "Chalo whiteboard par dekhte hain!", "Superb beta!", "Shabash, bilkul sahi!", "Arey waah!", "Imagine karo...", "Koi baat nahi, dobara try karte hain!". ' +
+      '2. Keep mathematical/scientific terminology in English (e.g., "addition", "fractions", "equals", "circle", "diagram", "number line", "whiteboard", "stars", "apples") while connecting explanations in warm conversational Hindi ("Jaise agar aapke paas 5 apples hain aur 3 aur mil gaye, toh total kitne hue?"). ' +
+      '3. Keep spoken replies short (1-3 sentences max) and end with one simple, engaging question. ' +
+      '4. If the student speaks in Hindi, English, or Hinglish, understand them perfectly and reply in this encouraging Hinglish tone.',
     ui: {
       micOn: 'Mic ON',
-      startSpeaking: 'Start Speaking',
-      askPlaceholder: 'Ms. Priya se kuch bhi poochhein ya answer type karein...',
-      sendMessage: 'Send',
+      startSpeaking: 'Bolna Shuru Karein',
+      askPlaceholder: 'Ms. Priya se kuch bhi poochhein ya answer likhein...',
+      sendMessage: 'Send Karein',
       textbook: 'Textbook',
-      console: 'Console',
-      askAnything: 'Ask Anything',
-      demoLesson: 'Demo Lesson',
+      console: 'Teacher Console',
+      askAnything: 'Kuch Bhi Poochhein',
+      demoLesson: 'Demo Lesson (Hinglish)',
       progressState: 'Progress State',
-      endClass: 'End Class',
-      resetClass: 'Reset Class',
+      endClass: 'Class Khatam',
+      resetClass: 'Reset Karein',
       musicOn: 'Music ON',
       music: 'Music',
     },
@@ -397,3 +402,121 @@ export function getLanguageDefinition(langId?: LanguageMode | string): LanguageD
   if (!langId) return SUPPORTED_LANGUAGES[0];
   return SUPPORTED_LANGUAGES.find((l) => l.id === langId) || SUPPORTED_LANGUAGES[0];
 }
+
+/**
+ * Detects if a student explicitly requested a language switch in their message.
+ * Supports English, Hindi, and Hinglish intent across English and Hindi scripts.
+ */
+export function detectLanguageIntent(text?: string | null): LanguageMode | null {
+  if (!text) return null;
+  const lower = text.toLowerCase().trim();
+
+  // English switch requests (covers Latin and Devanagari scripts, questions, commands)
+  if (
+    // Regex matches: "speak/talk/teach in english", "english please", "switch/change to english"
+    /\b(?:speak|talk|teach|explain|tell|switch|change|use)\s+(?:in\s+)?english\b/i.test(lower) ||
+    /\benglish\s+(?:please|only|mode|language)\b/i.test(lower) ||
+    /\b(?:in\s+)?english\s+(?:language\s+)?please\b/i.test(lower) ||
+    /\benglish\s*(?:mein|me|se)?\s*(?:bolo|boliye|bolna|bolne|baat|samjhao|padhao|sikhao|batao|karo|bataiye)\b/i.test(lower) ||
+    /(?:इंग्लिश|अंग्रेजी|अंग्रेज़ी)\s*(?:में|मे|से)?\s*(?:बोलो|बोलिए|बोलना|बोलने|बात|समझाओ|पढ़ाओ|सिखाओ|बताओ|करो|बोल|बता)/.test(lower) ||
+    /(?:इंग्लिश|अंग्रेजी|अंग्रेज़ी)\s*(?:भाषा\s*)?(?:प्लीज|में|मे)/.test(lower) ||
+    lower.includes('speak in english') ||
+    lower.includes('speak english') ||
+    lower.includes('talk in english') ||
+    lower.includes('talk english') ||
+    lower.includes('teach in english') ||
+    lower.includes('explain in english') ||
+    lower.includes('english me bolo') ||
+    lower.includes('english mein bolo') ||
+    lower.includes('english me baat karo') ||
+    lower.includes('english me samjhao') ||
+    lower.includes('english mein samjhao') ||
+    lower.includes('switch to english') ||
+    lower.includes('change to english') ||
+    lower.includes('only english') ||
+    lower.includes('english please') ||
+    lower.includes('in english please') ||
+    lower.includes('इंग्लिश में बोलो') ||
+    lower.includes('इंग्लिश बोलो') ||
+    lower.includes('अंग्रेजी में बोलो') ||
+    lower.includes('अंग्रेजी बोलो') ||
+    lower.includes('अंग्रेज़ी में बोलो') ||
+    lower.includes('इंग्लिश में बात करो') ||
+    lower.includes('इंग्लिश में समझाओ') ||
+    lower.includes('इंग्लिश में बोलने') ||
+    lower === 'english' ||
+    lower === 'इंग्लिश' ||
+    lower === 'अंग्रेजी'
+  ) {
+    return 'english';
+  }
+
+  // Hindi requests (covers English phrasing, Roman Hindi, and Devanagari Hindi)
+  if (
+    // Regex for "can you speak hindi", "speak in hindi", "do you speak hindi", etc.
+    /\b(?:can\s+you\s+|do\s+you\s+|could\s+you\s+|please\s+)?(?:speak|talk|teach|explain|tell|switch|change|use)\s+(?:in\s+)?hindi\b/i.test(lower) ||
+    /\bhindi\s+(?:please|only|mode|language)\b/i.test(lower) ||
+    /\b(?:in\s+)?hindi\s+(?:please|language)\b/i.test(lower) ||
+    /\b(?:kya\s+)?(?:aap\s+|tum\s+)?hindi\s*(?:mein|me|se)?\s*(?:bolo|boliye|bolna|bolne|baat|samjhao|padhao|sikhao|batao|karo|bolte|bolti|aati|aati hai)\b/i.test(lower) ||
+    /\bhindi\s*(?:kyu|kyun|kyu\s+nhi|kyu\s+nahi|nahi|nhi)\s*(?:bol|bolti|bol\s+rahi|bol\s+rhi)\b/i.test(lower) ||
+    /(?:कैन\s*यू\s*स्पीक|क्या\s*आप|तुम)?\s*(?:हिन्दी|हिंदी)\s*(?:में|मे|से)?\s*(?:बोलो|बोलिए|बोलना|बोलने|बात|समझाओ|पढ़ाओ|सिखाओ|बताओ|करो|बोलती|आती|बोल|सकती)/.test(lower) ||
+    /(?:हिन्दी|हिंदी)\s*(?:में|मे|से)?\s*(?:बात\s*करो|बोल\s*सकती|आती\s*है|बोलो|बोलिए)/.test(lower) ||
+    /(?:हिन्दी|हिंदी)\s*(?:क्यों|क्यूँ|क्यु|नही|नहीं|क्यूं)?\s*(?:नहीं|नही)?\s*(?:बोल|बोलती|बोल\s*रही)/.test(lower) ||
+    lower.includes('कैन यू स्पीक हिंदी') ||
+    lower.includes('कैन यू स्पीक हिन्दी') ||
+    lower.includes('can you speak hindi') ||
+    lower.includes('can you speak in hindi') ||
+    lower.includes('do you speak hindi') ||
+    lower.includes('speak in hindi') ||
+    lower.includes('speak hindi') ||
+    lower.includes('talk in hindi') ||
+    lower.includes('talk hindi') ||
+    lower.includes('teach in hindi') ||
+    lower.includes('hindi me bolo') ||
+    lower.includes('hindi mein bolo') ||
+    lower.includes('hindi me baat') ||
+    lower.includes('hindi mein baat') ||
+    lower.includes('hindi bol sakti ho') ||
+    lower.includes('hindi aati hai') ||
+    lower.includes('hindi kyu nhi') ||
+    lower.includes('hindi kyu nahi') ||
+    lower.includes('switch to hindi') ||
+    lower.includes('change to hindi') ||
+    lower.includes('hindi please') ||
+    lower.includes('हिन्दी में बोलो') ||
+    lower.includes('हिंदी में बोलो') ||
+    lower.includes('हिन्दी बोलो') ||
+    lower.includes('हिंदी बोलो') ||
+    lower.includes('हिंदी में बात करो') ||
+    lower.includes('हिन्दी में बात करो') ||
+    lower.includes('हिंदी आती है') ||
+    lower.includes('हिंदी बोल सकती हो') ||
+    lower === 'hindi' ||
+    lower === 'हिंदी' ||
+    lower === 'हिन्दी'
+  ) {
+    return 'hindi';
+  }
+
+  // Hinglish requests
+  if (
+    /\b(?:speak|talk|teach)\s+(?:in\s+)?hinglish\b/i.test(lower) ||
+    /\bhinglish\s*(?:mein|me|se)?\s*(?:bolo|boliye|bolna|bolne|baat|karo)\b/i.test(lower) ||
+    /(?:हिंग्लिश)\s*(?:में|मे)?\s*(?:बोलो|बोलिए|बोलना|बात)/.test(lower) ||
+    lower.includes('speak in hinglish') ||
+    lower.includes('speak hinglish') ||
+    lower.includes('talk in hinglish') ||
+    lower.includes('hinglish me bolo') ||
+    lower.includes('hinglish mein bolo') ||
+    lower.includes('switch to hinglish') ||
+    lower.includes('हिंग्लिश में बोलो') ||
+    lower.includes('हिंग्लिश बोलो') ||
+    lower === 'hinglish' ||
+    lower === 'हिंग्लिश'
+  ) {
+    return 'hinglish';
+  }
+
+  return null;
+}
+

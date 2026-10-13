@@ -5,6 +5,7 @@ import { loginWithGoogle, logoutFirebase } from '../lib/firebase';
 import { User as FirebaseUser } from 'firebase/auth';
 import { LanguageSelector } from './LanguageSelector';
 import { getLanguageDefinition } from '../lib/languages';
+import { StreakTrackerBadge } from './StreakTrackerBadge';
 
 interface ClassroomHeaderProps {
   classroomState: ClassroomState;
@@ -61,6 +62,47 @@ export const ClassroomHeader: React.FC<ClassroomHeaderProps> = ({
 
       {/* Right: Desktop Controls & Mobile Hamburger */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Daily Learning Streak Tracker */}
+        <StreakTrackerBadge studentName={classroomState.student.name} />
+
+        {/* 1-Click English / Hinglish Toggle Button */}
+        <button
+          id="quick-language-toggle-btn"
+          type="button"
+          onClick={() =>
+            onLanguageChange(classroomState.language === 'english' ? 'hinglish' : 'english')
+          }
+          className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 ${
+            classroomState.language === 'english'
+              ? 'bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 ring-2 ring-blue-200'
+              : classroomState.language === 'hinglish'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white ring-2 ring-orange-300 shadow-orange-200'
+              : 'bg-gray-50 hover:bg-gray-100 text-gray-800 border border-gray-200'
+          }`}
+          title="Quick switch between English and Hinglish"
+        >
+          {classroomState.language === 'english' ? (
+            <>
+              <span className="text-sm leading-none" aria-hidden="true">🇬🇧</span>
+              <span>English Mode</span>
+              <span className="px-1.5 py-0.2 bg-blue-200/80 text-blue-900 rounded-full text-[9px] font-black tracking-wider uppercase">
+                ON
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-sm leading-none" aria-hidden="true">🇮🇳</span>
+              <span className="hidden sm:inline">Hinglish Mode</span>
+              <span className="sm:hidden font-extrabold">Hinglish</span>
+              {classroomState.language === 'hinglish' && (
+                <span className="px-1.5 py-0.2 bg-white/25 rounded-full text-[9px] font-black tracking-wider uppercase">
+                  ON
+                </span>
+              )}
+            </>
+          )}
+        </button>
+
         {/* Multilingual Selector */}
         <LanguageSelector
           currentLanguage={classroomState.language}
@@ -136,6 +178,12 @@ export const ClassroomHeader: React.FC<ClassroomHeaderProps> = ({
       {/* Mobile Menu Dropdown Modal */}
       {mobileMenuOpen && (
         <div className="absolute top-[56px] left-0 right-0 bg-white border-b border-gray-200 shadow-xl p-4 flex flex-col gap-3 md:hidden z-50">
+          {/* Mobile Streak Bar */}
+          <div className="flex items-center justify-between pb-2 border-b border-gray-100 text-xs font-semibold text-gray-700">
+            <span>Daily Streak:</span>
+            <StreakTrackerBadge studentName={classroomState.student.name} />
+          </div>
+
           <div className="flex items-center justify-between pb-2 border-b border-gray-100 text-xs font-semibold text-gray-500">
             <span>Language:</span>
             <LanguageSelector

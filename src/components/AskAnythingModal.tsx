@@ -10,13 +10,25 @@ interface AskAnythingModalProps {
   onAskQuestion: (question: string) => void;
 }
 
-const SAMPLE_QUESTIONS = [
+const SAMPLE_QUESTIONS_ENGLISH = [
+  'Show me interactive vocabulary flashcards',
+  'Flip a math flashcard problem to solve',
   'Why is the sky blue?',
   'How do dinosaurs fly?',
   'What makes a rainbow?',
   'Why do plants need sunlight?',
   'How do fish breathe underwater?',
   'What is gravity?',
+];
+
+const SAMPLE_QUESTIONS_HINGLISH = [
+  'Interactive flashcards dikhao aur flip karo',
+  '5 + 3 kitna hota hai? Whiteboard par count karo',
+  'Fractions kya hote hain aur pizza se samjhao',
+  'Aasman neela kyu dikhta hai?',
+  'Dinosaurs kyu gayab ho gaye the?',
+  'Paudhe dhoop se apna khana kaise banate hain?',
+  'Taare raat mein kyu timtimate hain?',
 ];
 
 export const AskAnythingModal: React.FC<AskAnythingModalProps> = ({
@@ -26,6 +38,8 @@ export const AskAnythingModal: React.FC<AskAnythingModalProps> = ({
   onAskQuestion,
 }) => {
   const [customQuestion, setCustomQuestion] = useState('');
+  const isHinglish = classroomState.language === 'hinglish';
+  const sampleQuestions = isHinglish ? SAMPLE_QUESTIONS_HINGLISH : SAMPLE_QUESTIONS_ENGLISH;
 
   if (!isOpen) return null;
 
@@ -58,11 +72,20 @@ export const AskAnythingModal: React.FC<AskAnythingModalProps> = ({
                 <Sparkles className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-extrabold text-[#333333]">
-                  Ask Anything Mode
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-extrabold text-[#333333]">
+                    {isHinglish ? 'Kuch Bhi Poochhein (Ask Anything)' : 'Ask Anything Mode'}
+                  </h2>
+                  {isHinglish && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                      🇮🇳 Hinglish
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 font-medium">
-                  Universal Knowledge Router • Age-Appropriate Explanations for Class {classroomState.student.gradeClass}
+                  {isHinglish
+                    ? `Universal Knowledge Router • Class ${classroomState.student.gradeClass} ke liye aasan Hinglish bhasha mein`
+                    : `Universal Knowledge Router • Age-Appropriate Explanations for Class ${classroomState.student.gradeClass}`}
                 </p>
               </div>
             </div>
@@ -78,7 +101,9 @@ export const AskAnythingModal: React.FC<AskAnythingModalProps> = ({
           {/* Body */}
           <div className="p-6 space-y-6">
             <div className="p-4 rounded-2xl bg-[#F3F7F5] border border-gray-200 text-sm text-[#333333] leading-relaxed">
-              Have a curious question about science, space, nature, or anything at all? Ask Ms. Priya! She will explain it simply using our digital whiteboard and exciting examples.
+              {isHinglish
+                ? 'Science, space, nature ya math ke baare mein koi bhi sawaal ho? Ms. Priya se poochhein! Woh whiteboard par mazedaar visuals ke saath aasan Hinglish mein explain karengi.'
+                : 'Have a curious question about science, space, nature, or anything at all? Ask Ms. Priya! She will explain it simply using our digital whiteboard and exciting examples.'}
             </div>
 
             {/* Custom Question Form */}
@@ -87,24 +112,28 @@ export const AskAnythingModal: React.FC<AskAnythingModalProps> = ({
                 type="text"
                 value={customQuestion}
                 onChange={(e) => setCustomQuestion(e.target.value)}
-                placeholder="Ask any question (e.g., Why do stars twinkle?)..."
+                placeholder={
+                  isHinglish
+                    ? 'Ms. Priya se kuch bhi poochhein (jaise: Gravity kya hoti hai?)...'
+                    : 'Ask any question (e.g., Why do stars twinkle?)...'
+                }
                 className="flex-1 px-4 py-3 rounded-2xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6321]"
               />
               <button
                 type="submit"
                 className="px-5 py-3 bg-[#FF6321] hover:bg-[#e0551c] text-white font-bold rounded-2xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer"
               >
-                <Send className="w-4 h-4" /> Ask
+                <Send className="w-4 h-4" /> {isHinglish ? 'Poochhein' : 'Ask'}
               </button>
             </form>
 
             {/* Sample Prompts */}
             <div>
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-3">
-                Or pick a curious question:
+                {isHinglish ? 'Ya koi mazedaar question choose karein:' : 'Or pick a curious question:'}
               </span>
-              <div className="grid grid-cols-2 gap-2.5">
-                {SAMPLE_QUESTIONS.map((q) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {sampleQuestions.map((q) => (
                   <button
                     key={q}
                     onClick={() => handleSelectSample(q)}

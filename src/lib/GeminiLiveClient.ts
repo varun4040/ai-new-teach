@@ -10,6 +10,7 @@ export interface GeminiLiveClientOptions {
   onTranscript?: (text: string) => void;
   onInterrupted?: () => void;
   onToolCall?: (toolCall: WhiteboardToolEvent) => void;
+  onLanguageChanged?: (lang: string) => void;
   onConnectionStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'dev_offline', notice?: string) => void;
   onError?: (err: string) => void;
 }
@@ -60,6 +61,8 @@ export class GeminiLiveClient {
             this.options.onInterrupted?.();
           } else if (msg.type === 'tool_call' && msg.toolCall) {
             this.options.onToolCall?.(msg.toolCall);
+          } else if (msg.type === 'language_changed' && msg.language) {
+            this.options.onLanguageChanged?.(msg.language);
           } else if (msg.type === 'error') {
             this.options.onError?.(msg.error);
           }

@@ -13,8 +13,10 @@ import {
   Compass,
   Clock,
   ShieldCheck,
+  Flame,
 } from 'lucide-react';
 import { ClassroomState } from '../types';
+import { loadStreakData } from '../lib/streakTracker';
 
 interface TeacherDashboardModalProps {
   isOpen: boolean;
@@ -148,6 +150,14 @@ export const TeacherDashboardModal: React.FC<TeacherDashboardModalProps> = ({
                   <div className="flex justify-between py-1.5 border-b border-gray-100">
                     <span className="text-gray-500">Subject / Chapter:</span>
                     <span className="font-bold">{classroomState.subject} — {classroomState.chapter}</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-gray-100">
+                    <span className="text-gray-500 flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Daily Learning Streak:
+                    </span>
+                    <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                      {loadStreakData().currentStreak} Days
+                    </span>
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span className="text-gray-500">Current Concept:</span>

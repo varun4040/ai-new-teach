@@ -11,8 +11,10 @@ import {
   FileText,
   MessageSquare,
   CheckCircle,
+  Flame,
 } from 'lucide-react';
 import { ClassroomState } from '../types';
+import { loadStreakData } from '../lib/streakTracker';
 
 interface StateDrawerProps {
   isOpen: boolean;
@@ -228,6 +230,14 @@ Thank you for supporting ${classroomState.student.name}'s learning journey!
                 <div>
                   <span className="text-gray-500">Language:</span>{' '}
                   <span className="font-bold text-[#FF6321] capitalize">{classroomState.language}</span>
+                </div>
+                <div className="col-span-2 pt-1 border-t border-gray-100 flex items-center justify-between">
+                  <span className="text-gray-500 flex items-center gap-1">
+                    <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Daily Attendance Streak:
+                  </span>
+                  <span className="font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                    {loadStreakData().currentStreak} Days
+                  </span>
                 </div>
               </div>
             </div>

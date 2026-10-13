@@ -9,7 +9,7 @@ import { StateDrawer } from './components/StateDrawer';
 import { TeacherDashboardModal } from './components/TeacherDashboardModal';
 import { AskAnythingModal } from './components/AskAnythingModal';
 import { GeminiLiveClient } from './lib/GeminiLiveClient';
-import { PlaceholderTeacherAdapter } from './lib/PlaceholderTeacherAdapter';
+import { MotionTeacherAdapter } from './lib/MotionTeacherAdapter';
 import { AvatarAdapter } from './lib/AvatarAdapter';
 import { auth, saveSessionToFirestore } from './lib/firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -33,7 +33,8 @@ import {
 } from './lib/LessonState';
 import { soundEffects } from './lib/soundEffects';
 import { backgroundMusic } from './lib/backgroundMusic';
-import { getLanguageDefinition } from './lib/languages';
+import { getLanguageDefinition, detectLanguageIntent } from './lib/languages';
+import { recordLessonAttendance } from './lib/streakTracker';
 
 export default function App() {
   const [classroomState, setClassroomState] = useState<ClassroomState>(() => {
@@ -57,6 +58,7 @@ export default function App() {
   const [isStateDrawerOpen, setIsStateDrawerOpen] = useState(false);
   const [isDashboardModalOpen, setIsDashboardModalOpen] = useState(false);
   const [isAskAnythingModalOpen, setIsAskAnythingModalOpen] = useState(false);
+  const [isTeacherExpanded, setIsTeacherExpanded] = useState<boolean>(false);
   const [mobileTab, setMobileTab] = useState<'home' | 'lesson' | 'whiteboard' | 'progress' | 'more'>('home');
   const [connectionStatus, setConnectionStatus] = useState<
     'connecting' | 'connected' | 'disconnected' | 'dev_offline'
@@ -106,7 +108,7 @@ export default function App() {
       },
     });
     if (avatarAdapterRef.current) {
-      avatarAdapterRef.current.speak(undefined, `Welcome to Class 2 ${subjObj.subject}, Niyati! Let's explore ${initialChapter}.`);
+      avatarAdapterRef.current.speak(undefined, `Welcome to Class 2 ${subjObj.subject}, Niyati! Let's explore ${initialChapter}.`, classroomState.language);
     }
     setTranscriptHistory((prev) => [
       ...prev,
@@ -136,7 +138,7 @@ export default function App() {
       },
     });
     if (avatarAdapterRef.current) {
-      avatarAdapterRef.current.speak(undefined, `Let's study ${ch.chapter}, Niyati! ${ch.objective}`);
+      avatarAdapterRef.current.speak(undefined, `Let's study ${ch.chapter}, Niyati! ${ch.objective}`, classroomState.language);
     }
     setTranscriptHistory((prev) => [
       ...prev,
@@ -185,9 +187,12 @@ export default function App() {
 
   // Avatar Adapter
   const avatarAdapterRef = useRef<AvatarAdapter | null>(null);
+  const classroomStateRef = useRef<ClassroomState>(classroomState);
+  classroomStateRef.current = classroomState;
   const [avatarState, setAvatarState] = useState<AvatarState>({
     isSpeaking: false,
     emotion: 'happy',
+    characterState: 'HAPPY',
     gesture: 'idle',
     lookingAt: 'student',
     transcriptText: 'Namaste! Ready for our class today?',
@@ -199,9 +204,10 @@ export default function App() {
   // Initialize Avatar Adapter and Gemini Live Client on Mount
   useEffect(() => {
     // 1. Instantiate Pluggable Avatar Adapter
-    const adapter = new PlaceholderTeacherAdapter();
+    const adapter = new MotionTeacherAdapter();
     avatarAdapterRef.current = adapter;
 
+    adapter.setLanguage?.(classroomStateRef.current.language);
     adapter.initialize().then(() => {
       setAvatarState(adapter.getState());
     });
@@ -212,6 +218,9 @@ export default function App() {
       },
     });
 
+    // Initialize daily learning streak for today's session
+    recordLessonAttendance();
+
     // 2. Instantiate Gemini Live WebSocket Client
     const liveClient = new GeminiLiveClient({
       onConnectionStatus: (status, notice) => {
@@ -219,7 +228,7 @@ export default function App() {
         setConnectionNotice(notice);
       },
       onTranscript: (text) => {
-        adapter.speak(undefined, text);
+        adapter.speak(undefined, text, classroomStateRef.current.language);
         setTranscriptHistory((prev) => [
           ...prev,
           {
@@ -228,6 +237,9 @@ export default function App() {
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           },
         ]);
+      },
+      onLanguageChanged: (newLang) => {
+        handleLanguageChange(newLang as LanguageMode, false);
       },
       onInterrupted: () => {
         adapter.interrupt();
@@ -275,7 +287,7 @@ export default function App() {
       if (success) {
         setIsMicActive(true);
         if (avatarAdapterRef.current) {
-          avatarAdapterRef.current.setEmotion('listening');
+          avatarAdapterRef.current.setCharacterState('LISTENING');
           avatarAdapterRef.current.lookAtStudent();
         }
       } else {
@@ -299,6 +311,7 @@ export default function App() {
 
   // Send Text Message to Teacher
   const handleSendTextMessage = async (text: string) => {
+    recordLessonAttendance();
     setTranscriptHistory((prev) => [
       ...prev,
       {
@@ -309,7 +322,22 @@ export default function App() {
     ]);
 
     if (avatarAdapterRef.current) {
-      avatarAdapterRef.current.setEmotion('thinking');
+      avatarAdapterRef.current.setCharacterState('THINKING');
+    }
+
+    const detectedLang = detectLanguageIntent(text);
+    let activeState = classroomState;
+    if (detectedLang && detectedLang !== classroomState.language) {
+      activeState = {
+        ...classroomState,
+        language: detectedLang,
+        student: { ...classroomState.student, preferredLanguage: detectedLang },
+      };
+      setClassroomState(activeState);
+      try {
+        localStorage.setItem('ai_live_teacher_lang', detectedLang);
+      } catch (e) {}
+      avatarAdapterRef.current?.setLanguage?.(detectedLang);
     }
 
     const isWsActive =
@@ -318,7 +346,7 @@ export default function App() {
       geminiLiveClientRef.current.isConnected();
 
     if (isWsActive) {
-      geminiLiveClientRef.current!.sendTextMessage(text, classroomState);
+      geminiLiveClientRef.current!.sendTextMessage(text, activeState);
       return;
     }
 
@@ -329,15 +357,19 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          classroomState,
+          classroomState: activeState,
           textbook,
         }),
       });
 
       const data = await res.json();
+      const effectiveLang = (data.languageChanged as LanguageMode) || activeState.language;
+      if (data.languageChanged && data.languageChanged !== activeState.language) {
+        handleLanguageChange(data.languageChanged as LanguageMode, false);
+      }
       if (data.text && avatarAdapterRef.current) {
         avatarAdapterRef.current.setEmotion('explaining');
-        avatarAdapterRef.current.speak(undefined, data.text);
+        avatarAdapterRef.current.speak(undefined, data.text, effectiveLang);
         setTranscriptHistory((prev) => [
           ...prev,
           {
@@ -360,10 +392,13 @@ export default function App() {
 
   // Start Built-In Demo Lesson ("Class 2 Mathematics: Addition up to 20")
   const handleStartDemoLesson = () => {
+    recordLessonAttendance();
     setClassroomState(DEMO_MATH_LESSON_STATE);
 
-    const demoSpeech =
-      "Welcome Ananya! Let's try something fun. Look at the whiteboard! I put 5 red apples on top, and 3 green apples underneath. How many apples do we have altogether?";
+    const isHinglish = classroomState.language === 'hinglish';
+    const demoSpeech = isHinglish
+      ? "Namaste Niyati! Chalo saath mein mast visual problem solve karte hain! Look at the whiteboard: upar 5 red apples hain aur neeche 3 green apples. Total kitne apples hue hamare paas?"
+      : "Welcome Ananya! Let's try something fun. Look at the whiteboard! I put 5 red apples on top, and 3 green apples underneath. How many apples do we have altogether?";
 
     setTranscriptHistory((prev) => [
       ...prev,
@@ -383,7 +418,9 @@ export default function App() {
         group1: 5,
         group2: 3,
         symbol: '+',
-        label: 'Ananya’s Apples: 5 Red Apples + 3 Green Apples = 8 Total',
+        label: isHinglish
+          ? 'Niyati ke Apples: 5 Red Apples + 3 Green Apples = 8 Total'
+          : 'Ananya’s Apples: 5 Red Apples + 3 Green Apples = 8 Total',
       },
     };
 
@@ -393,7 +430,7 @@ export default function App() {
       avatarAdapterRef.current.setEmotion('encouraging');
       avatarAdapterRef.current.setGesture('pointing_right');
       avatarAdapterRef.current.lookAtBoard();
-      avatarAdapterRef.current.speak(undefined, demoSpeech);
+      avatarAdapterRef.current.speak(undefined, demoSpeech, classroomState.language);
     }
   };
 
@@ -415,9 +452,14 @@ export default function App() {
       soundEffects.playTryAgain();
     }
 
+    const isHinglish = classroomState.language === 'hinglish';
     const feedbackText = isCorrect
-      ? 'Super star! That is completely correct! 8 apples altogether.'
-      : 'Good try! Let us count them together on the whiteboard step by step.';
+      ? (isHinglish
+          ? 'Super star beta! Yeh bilkul correct answer hai! 8 apples altogether.'
+          : 'Super star! That is completely correct! 8 apples altogether.')
+      : (isHinglish
+          ? 'Good try beta! Chalo saath mein whiteboard par step by step count karte hain.'
+          : 'Good try! Let us count them together on the whiteboard step by step.');
 
     const feedbackToolCall: WhiteboardToolEvent = {
       type: 'check_answer',
@@ -430,9 +472,9 @@ export default function App() {
     setActiveToolEvent(feedbackToolCall);
 
     if (avatarAdapterRef.current) {
-      avatarAdapterRef.current.setEmotion(isCorrect ? 'happy' : 'encouraging');
-      avatarAdapterRef.current.setGesture(isCorrect ? 'clapping' : 'idle');
-      avatarAdapterRef.current.speak(undefined, feedbackText);
+      avatarAdapterRef.current.setCharacterState(isCorrect ? 'CELEBRATING' : 'ENCOURAGING');
+      avatarAdapterRef.current.setGesture(isCorrect ? 'clapping' : 'thumbs_up');
+      avatarAdapterRef.current.speak(undefined, feedbackText, classroomState.language);
     }
 
     setClassroomState((prev) =>
@@ -446,7 +488,7 @@ export default function App() {
   };
 
   // Language Mode Change
-  const handleLanguageChange = (lang: LanguageMode) => {
+  const handleLanguageChange = (lang: LanguageMode, speakGreeting = true) => {
     setClassroomState((prev) => ({
       ...prev,
       language: lang,
@@ -456,9 +498,10 @@ export default function App() {
       localStorage.setItem('ai_live_teacher_lang', lang);
     } catch (e) {}
 
+    avatarAdapterRef.current?.setLanguage?.(lang);
     const langDef = getLanguageDefinition(lang);
-    if (avatarAdapterRef.current) {
-      avatarAdapterRef.current.speak(undefined, langDef.greeting);
+    if (speakGreeting && avatarAdapterRef.current) {
+      avatarAdapterRef.current.speak(undefined, langDef.greeting, lang);
     }
   };
 
@@ -473,13 +516,28 @@ export default function App() {
       avatarAdapterRef.current.setEmotion('thinking');
     }
 
+    const detectedLang = detectLanguageIntent(question);
+    let activeState = classroomState;
+    if (detectedLang && detectedLang !== classroomState.language) {
+      activeState = {
+        ...classroomState,
+        language: detectedLang,
+        student: { ...classroomState.student, preferredLanguage: detectedLang },
+      };
+      setClassroomState(activeState);
+      try {
+        localStorage.setItem('ai_live_teacher_lang', detectedLang);
+      } catch (e) {}
+      avatarAdapterRef.current?.setLanguage?.(detectedLang);
+    }
+
     const isWsActive =
       geminiLiveClientRef.current &&
       connectionStatus === 'connected' &&
       geminiLiveClientRef.current.isConnected();
 
     if (isWsActive) {
-      geminiLiveClientRef.current!.sendTextMessage(`[Ask Anything Mode]: ${question}`, classroomState);
+      geminiLiveClientRef.current!.sendTextMessage(`[Ask Anything Mode]: ${question}`, activeState);
       return;
     }
 
@@ -487,13 +545,17 @@ export default function App() {
       const res = await fetch('/api/gemini/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: `[Ask Anything Mode]: ${question}`, classroomState, textbook }),
+        body: JSON.stringify({ message: `[Ask Anything Mode]: ${question}`, classroomState: activeState, textbook }),
       });
       const data = await res.json();
+      const effectiveLang = (data.languageChanged as LanguageMode) || activeState.language;
+      if (data.languageChanged && data.languageChanged !== activeState.language) {
+        handleLanguageChange(data.languageChanged as LanguageMode, false);
+      }
       if (data.text) {
         if (avatarAdapterRef.current) {
           avatarAdapterRef.current.setEmotion('explaining');
-          avatarAdapterRef.current.speak(undefined, data.text);
+          avatarAdapterRef.current.speak(undefined, data.text, effectiveLang);
         }
         if (data.toolCall) {
           setActiveToolEvent(data.toolCall);
@@ -685,12 +747,26 @@ export default function App() {
         <div className="flex-1 flex flex-col md:hidden overflow-hidden gap-2">
           {mobileTab === 'home' && (
             <>
-              {/* Teacher Area (Compact 32-38vh on mobile) */}
-              <div className="h-[32vh] min-h-[200px] max-h-[260px] w-full shrink-0">
+              {/* Teacher Area (Generous responsive height with Enlarge & Zoom support) */}
+              <div
+                className={`w-full shrink-0 transition-all duration-300 ${
+                  isTeacherExpanded
+                    ? 'h-[64vh] min-h-[400px]'
+                    : 'h-[46vh] min-h-[300px] max-h-[385px]'
+                }`}
+              >
                 <TeacherAvatarView
                   avatarState={avatarState}
                   teacherName="Ms. Priya"
                   onSelectEmotion={(emo) => avatarAdapterRef.current?.setEmotion(emo)}
+                  onSelectCharacterState={(state) => avatarAdapterRef.current?.setCharacterState(state)}
+                  isExpanded={isTeacherExpanded}
+                  onToggleExpand={() => setIsTeacherExpanded(!isTeacherExpanded)}
+                  currentLanguage={classroomState.language}
+                  onToggleHinglish={() =>
+                    handleLanguageChange(classroomState.language === 'hinglish' ? 'english' : 'hinglish')
+                  }
+                  onQuickAskHinglish={(q) => handleAskAnythingQuestion(q)}
                 />
               </div>
 
@@ -712,7 +788,7 @@ export default function App() {
               </div>
 
               {/* Whiteboard Area */}
-              <div className="flex-1 w-full h-[42vh] min-h-[260px] overflow-hidden">
+              <div className="flex-1 w-full h-[38vh] min-h-[220px] overflow-hidden">
                 <DigitalWhiteboard
                   toolEvent={activeToolEvent}
                   onClear={() => setActiveToolEvent(null)}
@@ -736,15 +812,35 @@ export default function App() {
         </div>
 
         {/* DESKTOP / TABLET VIEW */}
-        <section className="hidden md:block md:col-span-5 lg:col-span-4 h-full min-h-[300px]">
+        <section
+          className={`hidden md:block h-full min-h-[350px] transition-all duration-300 ${
+            isTeacherExpanded
+              ? 'md:col-span-7 lg:col-span-8'
+              : 'md:col-span-5 lg:col-span-5'
+          }`}
+        >
           <TeacherAvatarView
             avatarState={avatarState}
             teacherName="Ms. Priya"
             onSelectEmotion={(emo) => avatarAdapterRef.current?.setEmotion(emo)}
+            onSelectCharacterState={(state) => avatarAdapterRef.current?.setCharacterState(state)}
+            isExpanded={isTeacherExpanded}
+            onToggleExpand={() => setIsTeacherExpanded(!isTeacherExpanded)}
+            currentLanguage={classroomState.language}
+            onToggleHinglish={() =>
+              handleLanguageChange(classroomState.language === 'hinglish' ? 'english' : 'hinglish')
+            }
+            onQuickAskHinglish={(q) => handleAskAnythingQuestion(q)}
           />
         </section>
 
-        <section className="hidden md:block md:col-span-7 lg:col-span-8 h-full min-h-[350px]">
+        <section
+          className={`hidden md:block h-full min-h-[350px] transition-all duration-300 ${
+            isTeacherExpanded
+              ? 'md:col-span-5 lg:col-span-4'
+              : 'md:col-span-7 lg:col-span-7'
+          }`}
+        >
           <DigitalWhiteboard
             toolEvent={activeToolEvent}
             onClear={() => setActiveToolEvent(null)}
@@ -846,7 +942,8 @@ export default function App() {
           if (avatarAdapterRef.current) {
             avatarAdapterRef.current.speak(
               undefined,
-              `I have opened our textbook chapter: ${tb.chapterTitle}! We will follow this textbook carefully.`
+              `I have opened our textbook chapter: ${tb.chapterTitle}! We will follow this textbook carefully.`,
+              classroomState.language
             );
           }
         }}

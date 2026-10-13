@@ -108,6 +108,35 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
 
           {/* Languages List */}
           <div className="overflow-y-auto p-2 space-y-3 max-h-[300px] scrollbar-thin">
+            {!searchQuery && (
+              <div className="p-2 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg leading-none">🇮🇳</span>
+                  <div className="text-left">
+                    <div className="text-[11px] font-bold text-orange-950 flex items-center gap-1.5">
+                      <span>Hinglish Mode</span>
+                      <span className="text-[9px] px-1.5 py-0.2 bg-orange-200/80 text-orange-800 rounded font-bold">Popular</span>
+                    </div>
+                    <div className="text-[9px] text-orange-700">Conversational Hindi + English blend</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onLanguageChange('hinglish');
+                    setIsOpen(false);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all shrink-0 ${
+                    currentLanguage === 'hinglish'
+                      ? 'bg-orange-600 text-white shadow-2xs'
+                      : 'bg-white text-orange-800 border border-orange-300 hover:bg-orange-100'
+                  }`}
+                >
+                  {currentLanguage === 'hinglish' ? 'Active ✓' : 'Switch'}
+                </button>
+              </div>
+            )}
+
             {categories.map((cat) => {
               const langsInCat = filteredLanguages.filter((l) => l.category === cat.id);
               if (langsInCat.length === 0) return null;
